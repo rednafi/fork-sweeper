@@ -64,7 +64,9 @@ func TestFetchForkedReposPage(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintln(
 				w,
-				`[{"full_name": "example/forkedrepo", "html_url": "https://github.com/example/forkedrepo", "fork": true, "owner": {"name": "example"}, "created_at": "2020-01-01T00:00:00Z"}]`)
+				`[{"full_name": "example/forkedrepo",`+
+					`"html_url": "https://github.com/example/forkedrepo", "fork": true,`+
+					`"owner": {"name": "example"}, "created_at": "2020-01-01T00:00:00Z"}]`)
 		}))
 	defer mockServer.Close()
 
@@ -110,12 +112,12 @@ func TestFetchForkedRepos(t *testing.T) {
 			fmt.Fprintln(
 				w,
 				`[{"full_name": "example/forkedrepo",`+
-				`"html_url": "https://test.com/example/forkedrepo", "fork": true,`+
-				`"owner": {"name": "example"}, "created_at": "2020-01-01T00:00:00Z"},`+
+					`"html_url": "https://test.com/example/forkedrepo", "fork": true,`+
+					`"owner": {"name": "example"}, "created_at": "2020-01-01T00:00:00Z"},`+
 
-				`{"full_name": "example/forkedrepo2",`+
-				`"html_url": "https://test.com/example/forkedrepo2", "fork": true,`+
-				`"owner": {"name": "example2"}, "created_at": "2020-01-01T00:00:00Z"}]`)
+					`{"full_name": "example/forkedrepo2",`+
+					`"html_url": "https://test.com/example/forkedrepo2", "fork": true,`+
+					`"owner": {"name": "example2"}, "created_at": "2020-01-01T00:00:00Z"}]`)
 
 		}))
 
