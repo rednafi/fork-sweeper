@@ -42,7 +42,7 @@ changelog:
       - "^test:"
 
 brews:
-  - name: link-patrol
+  - name: fork-sweeper
     homepage: "https://github.com/rednafi/fork-sweeper"
     description: Remove unused GitHub forks
     repository:
