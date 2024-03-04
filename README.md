@@ -21,7 +21,8 @@ Remove unused GitHub forks
 -   On macOS, brew install:
 
     ```sh
-    brew install fork-sweeper
+    brew tap rednafi/fork-sweeper https://github.com/rednafi/fork-sweeper \
+        && brew install fork-sweeper
     ```
 
 -   Elsewhere, go install:
