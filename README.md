@@ -64,7 +64,7 @@ Remove unused GitHub forks
       -version
     ```
 
--   List forked repos older than `n` days. By default it'll fetch all reposties that were
+-   List forked repos older than `n` days. By default, it'll fetch all reposties that were
     forked at least 60 days ago.
 
     ```sh
