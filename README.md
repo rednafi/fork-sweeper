@@ -28,7 +28,7 @@ Remove unused GitHub forks
 -   Elsewhere, go install:
 
     ```sh
-    go install fork-sweeper
+    go install github.com/rednafi/fork-sweeper/cmd/fork-sweeper
     ```
 
 ## Prerequisites
