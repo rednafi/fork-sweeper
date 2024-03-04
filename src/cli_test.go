@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -51,7 +52,9 @@ func TestUnmarshalRepo(t *testing.T) {
 
 	// Compare the expected and actual repo structs
 	if !reflect.DeepEqual(expected, result) {
-		t.Errorf("Unmarshalled repo does not match expected value. Expected %+v, got %+v", expected, result)
+		t.Errorf(
+			`Unmarshalled repo does not match expected value.
+			Expected %+v, got %+v`, expected, result)
 	}
 }
 
@@ -83,7 +86,7 @@ func TestFetchForkedReposPage(t *testing.T) {
 	}
 
 	forkedRepos, err := fetchForkedReposPage(
-		context.Background(), mockServer.URL, "example", "fake-token", 1, 10)
+		context.Background(), mockServer.URL, "example", "fake-token", 1, 10, 60)
 	if err != nil {
 		t.Fatalf("fetchForkedReposPage returned an error: %v", err)
 	}
@@ -145,7 +148,13 @@ func TestFetchForkedRepos(t *testing.T) {
 	}
 
 	forkedRepos, err := fetchForkedRepos(
-		context.Background(), mockServer.URL, "example", "fake-token", 10, 1)
+		context.Background(),
+		mockServer.URL,
+		"example",
+		"fake-token",
+		10,
+		1,
+		60)
 	if err != nil {
 		t.Fatalf("fetchForkedRepos returned an error: %v", err)
 	}
@@ -322,4 +331,145 @@ func TestPrintWithColor(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Test cli flow
+
+// Mock functions to replace actual behavior in tests
+var (
+	mockExitFunc = func(called *int) func(int) {
+		return func(code int) {
+			*called++
+		}
+	}
+	mockFlagErrorHandler = flag.ContinueOnError
+	mockPrintWithColor   = func(color, text string) { fmt.Println("mockPrintWithColor") }
+
+	mockFetchForkedRepos = func(
+		ctx context.Context,
+		baseURL,
+		owner,
+		token string,
+		perPage,
+		maxPage,
+		olderThanDays int) ([]repo, error) {
+		fmt.Println("mockFetchForkedRepos")
+		return []repo{{Name: "test-repo"}}, nil
+	}
+
+	mockDeleteRepos = func(
+		ctx context.Context,
+		baseURL,
+		token string,
+		repos []repo) error {
+		fmt.Println("mockDeleteRepos")
+		return nil
+	}
+)
+
+func TestNewCLIConfig_Defaults(t *testing.T) {
+	t.Parallel()
+	config := NewCLIConfig(nil, "", nil)
+
+	if config.printWithColor == nil || config.fetchForkedRepos == nil || config.deleteRepos == nil {
+		t.Fatal("Default functions were not set correctly")
+	}
+}
+
+func TestWithFlagErrorHandling_Option(t *testing.T) {
+	t.Parallel()
+	config := NewCLIConfig(nil, "", nil).WithFlagErrorHandling(mockFlagErrorHandler)
+	if config.flagErrorHandling != mockFlagErrorHandler {
+		t.Fatal("WithFlagErrorHandling did not set the flag error handling")
+	}
+}
+
+func TestWithPrintWithColor_Option(t *testing.T) {
+	t.Parallel()
+	config := NewCLIConfig(nil, "", nil).WithPrintWithColor(mockPrintWithColor)
+	if config.printWithColor == nil {
+		t.Fatal("WithPrintWithColor did not set the function")
+	}
+}
+
+func TestWithFetchForkedRepos_Option(t *testing.T) {
+	t.Parallel()
+	config := NewCLIConfig(nil, "", nil).WithFetchForkedRepos(mockFetchForkedRepos)
+
+	if config.fetchForkedRepos == nil {
+		t.Fatal("WithFetchForkedRepos did not set the function")
+	}
+}
+
+func TestWithDeleteRepos_Option(t *testing.T) {
+	t.Parallel()
+	config := NewCLIConfig(nil, "", nil).WithDeleteRepos(mockDeleteRepos)
+	if config.deleteRepos == nil {
+		t.Fatal("WithDeleteRepos did not set the function")
+	}
+}
+
+func captureStderr(testFunc func()) string {
+	r, w, _ := os.Pipe()
+	originalStderr := os.Stderr
+	os.Stderr = w
+
+	outputChan := make(chan string)
+	go func() {
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		outputChan <- buf.String()
+	}()
+
+	testFunc()
+
+	w.Close()
+	os.Stderr = originalStderr
+	return <-outputChan
+}
+
+func TestCLI_MissingOwnerToken(t *testing.T) {
+	t.Parallel()
+	exitCalls := new(int)
+	stderrOutput := captureStderr(
+		func() {
+			cliConfig := NewCLIConfig(
+				os.Stderr,
+				"test-version",
+				mockExitFunc(exitCalls),
+			).WithFetchForkedRepos(mockFetchForkedRepos).
+				WithDeleteRepos(mockDeleteRepos).
+				WithPrintWithColor(mockPrintWithColor).
+				WithFlagErrorHandling(mockFlagErrorHandler)
+
+			// Execute the CLI
+			cliConfig.CLI([]string{"cmd"})
+		})
+
+	// Verify
+	if !strings.Contains(stderrOutput, "Owner and token are required") {
+		t.Errorf("Expected error message not found in output")
+	}
+
+	if *exitCalls != 1 {
+		t.Errorf("Expected os.Exit to be called once, got %d", *exitCalls)
+	}
+}
+func TestCLI_Success(t *testing.T) {
+	t.Parallel()
+	exitCalls := new(int)
+	cliConfig := NewCLIConfig(
+		os.Stderr,
+		"test-version",
+		mockExitFunc(exitCalls),
+	).WithDeleteRepos(mockDeleteRepos).
+		WithFetchForkedRepos(mockFetchForkedRepos).
+		WithPrintWithColor(mockPrintWithColor).
+		WithFlagErrorHandling(mockFlagErrorHandler)
+
+	// Execute the CLI
+	args := []string{"cmd", "--owner", "testOwner", "--token", "testToken"}
+
+	cliConfig.CLI(args)
+
 }

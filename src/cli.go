@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"sync"
@@ -29,7 +30,11 @@ type repo struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-var httpClient = &http.Client{Timeout: 10 * time.Second}
+var httpClientPool = sync.Pool{
+	New: func() any {
+		return &http.Client{Timeout: 10 * time.Second}
+	},
+}
 
 func fetchForkedReposPage(
 	ctx context.Context,
@@ -37,7 +42,8 @@ func fetchForkedReposPage(
 	owner,
 	token string,
 	pageNum,
-	perPage int) ([]repo, error) {
+	perPage,
+	olderThanDays int) ([]repo, error) {
 
 	url := fmt.Sprintf(
 		"%s/users/%s/repos?type=forks&page=%d&per_page=%d",
@@ -59,8 +65,11 @@ func fetchForkedReposPage(
 	}
 
 	var forkedRepos []repo
+
+	cutOffDate := time.Now().AddDate(0, 0, -olderThanDays)
+
 	for _, repo := range repos {
-		if repo.IsFork {
+		if repo.IsFork && repo.CreatedAt.Before(cutOffDate) {
 			forkedRepos = append(forkedRepos, repo)
 		}
 	}
@@ -74,11 +83,20 @@ func fetchForkedRepos(
 	owner,
 	token string,
 	perPage,
-	maxPage int) ([]repo, error) {
+	maxPage,
+	olderThanDays int) ([]repo, error) {
 
 	var allRepos []repo
 	for pageNum := 1; pageNum <= maxPage; pageNum++ {
-		repos, err := fetchForkedReposPage(ctx, baseURL, owner, token, pageNum, perPage)
+		repos, err := fetchForkedReposPage(
+			ctx,
+			baseURL,
+			owner,
+			token,
+			pageNum,
+			perPage,
+			olderThanDays)
+
 		if err != nil {
 			return nil, err
 		}
@@ -93,13 +111,16 @@ func fetchForkedRepos(
 }
 
 func doRequest(req *http.Request, v any) error {
+	httpClient := httpClientPool.Get().(*http.Client)
+	defer httpClientPool.Put(httpClient)
+
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= http.StatusBadRequest {
 		return fmt.Errorf("API request failed with status: %d", resp.StatusCode)
 	}
 
@@ -153,26 +174,123 @@ func printWithColor(color, text string) {
 	fmt.Println(color + text + Reset)
 }
 
-func CLI() {
+type CLIConfig struct {
+
+	// Required
+	writer   io.Writer
+	version  string
+	exitFunc func(int)
+
+	// Optional
+	flagErrorHandling flag.ErrorHandling
+	printWithColor    func(color, text string)
+	fetchForkedRepos  func(
+		ctx context.Context,
+		baseURL,
+		owner,
+		token string,
+		perPage,
+		maxPage,
+		olderThanDays int) ([]repo, error)
+	deleteRepos func(ctx context.Context, baseURL, token string, repos []repo) error
+}
+
+// Dysfunctional options pattern
+
+func (c *CLIConfig) WithFlagErrorHandling(h flag.ErrorHandling) *CLIConfig {
+	c.flagErrorHandling = h
+	return c
+}
+
+func (c *CLIConfig) WithPrintWithColor(f func(color, text string)) *CLIConfig {
+	c.printWithColor = printWithColor
+	return c
+}
+
+func (c *CLIConfig) WithFetchForkedRepos(
+	f func(
+		ctx context.Context,
+		baseURL,
+		owner,
+		token string,
+		perPage,
+		maxPage,
+		olderThanDays int) ([]repo, error)) *CLIConfig {
+
+	c.fetchForkedRepos = f
+	return c
+}
+
+func (c *CLIConfig) WithDeleteRepos(
+	f func(ctx context.Context, baseURL, token string, repos []repo) error) *CLIConfig {
+
+	c.deleteRepos = f
+	return c
+}
+
+func NewCLIConfig(
+	writer io.Writer,
+	version string,
+	exitFunc func(int),
+) *CLIConfig {
+
+	return &CLIConfig{
+		writer:            writer,
+		version:           version,
+		exitFunc:          exitFunc,
+		flagErrorHandling: flag.ExitOnError,
+		printWithColor:    printWithColor,
+		fetchForkedRepos:  fetchForkedRepos,
+		deleteRepos:       deleteRepos,
+	}
+}
+
+func (c *CLIConfig) CLI(args []string) {
 	var (
-		owner   string
-		token   string
-		perPage int
-		maxPage int
+		owner             string
+		token             string
+		perPage           int
+		maxPage           int
+		olderThanDays     int
+		version           bool
+		delete            bool
+		writer            = c.writer
+		versionNum        = c.version
+		exitFunc          = c.exitFunc
+		flagErrorHandling = c.flagErrorHandling
+		printWithColor    = c.printWithColor
+		fetchForkedRepos  = c.fetchForkedRepos
+		deleteRepos       = c.deleteRepos
 	)
 
 	// Parsing command-line flags
-	flag.StringVar(&owner, "owner", "", "GitHub repository owner (required)")
-	flag.StringVar(&token, "token", "", "GitHub personal access token (required)")
-	flag.IntVar(&perPage, "per-page", 100, "Number of repositories per page")
-	flag.IntVar(&maxPage, "max-page", 100, "Maximum page number to fetch")
-	flag.Parse()
+	fs := flag.NewFlagSet("fork-sweeper", flagErrorHandling)
+	fs.SetOutput(writer)
+
+	fs.StringVar(&owner, "owner", "", "GitHub repo owner (required)")
+	fs.StringVar(&token, "token", "", "GitHub access token (required)")
+	fs.IntVar(&perPage, "per-page", 100, "Number of forked repos fetched per page")
+	fs.IntVar(&maxPage, "max-page", 100, "Maximum page number to fetch")
+	fs.IntVar(
+		&olderThanDays,
+		"older-than-days",
+		60,
+		"Delete forked repos older than this number of days")
+	fs.BoolVar(&version, "version", false, "Print version")
+	fs.BoolVar(&delete, "delete", false, "Delete forked repos")
+	fs.Parse(args)
+
+	// Printing version
+	if version {
+		fmt.Println(versionNum)
+		return
+	}
 
 	// Validating required arguments
 	if owner == "" || token == "" {
 		fmt.Fprintf(os.Stderr, "%sError:%s Owner and token are required.\n", Red, Reset)
-		flag.PrintDefaults()
-		os.Exit(1)
+		fs.PrintDefaults()
+		exitFunc(1)
 	}
 
 	ctx := context.Background()
@@ -180,10 +298,18 @@ func CLI() {
 
 	// Fetching repositories
 	printWithColor(Blue, fmt.Sprintf("\nFetching repositories for %s...\n", owner))
-	forkedRepos, err := fetchForkedRepos(ctx, baseURL, owner, token, perPage, maxPage)
+	forkedRepos, err := fetchForkedRepos(
+		ctx,
+		baseURL,
+		owner,
+		token,
+		perPage,
+		maxPage,
+		olderThanDays)
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%sError fetching repositories:%s %v\n", Red, Reset, err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	if len(forkedRepos) == 0 {
@@ -198,10 +324,14 @@ func CLI() {
 	}
 
 	// Deleting forked repositories
+	if !delete {
+		return
+	}
+
 	printWithColor(Blue, "\nDeleting forked repositories...\n")
 	if err := deleteRepos(ctx, baseURL, token, forkedRepos); err != nil {
 		fmt.Fprintf(os.Stderr, "%sError deleting repositories:%s %v\n", Red, Reset, err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 	printWithColor(Green, "Deletion completed successfully.")
 }
