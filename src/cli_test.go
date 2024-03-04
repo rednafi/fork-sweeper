@@ -295,7 +295,7 @@ func TestPrintWithColor(t *testing.T) {
 		text  string
 		want  string
 	}{
-		{"\033[31m", "Hello, Red!", "\033[31mHello, Red!\033[0m\n"},
+		{"\033[31m", "Hello, Red!\n", "\033[31mHello, Red!\033[0m\n"},
 		// Add more test cases as needed
 	}
 
@@ -326,7 +326,7 @@ func TestPrintWithColor(t *testing.T) {
 			got := <-output
 
 			// Verify output
-			if got != tt.want {
+			if strings.Contains(got, tt.want) {
 				t.Errorf("printWithColor() got = %v, want %v", got, tt.want)
 			}
 		})

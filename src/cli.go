@@ -148,17 +148,17 @@ func deleteRepos(ctx context.Context, baseURL, token string, repos []repo) error
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
 
-	for _, repo := range repos {
+	for _, r := range repos {
 		wg.Add(1)
-		go func() {
+		go func(r repo) {
 			defer wg.Done()
-			if err := deleteRepo(ctx, baseURL, repo.Owner.Name, repo.Name, token); err != nil {
+			if err := deleteRepo(ctx, baseURL, r.Owner.Name, r.Name, token); err != nil {
 				select {
 				case errChan <- err:
 				default:
 				}
 			}
-		}()
+		}(r)
 	}
 
 	wg.Wait()
@@ -196,7 +196,6 @@ type CLIConfig struct {
 }
 
 // Dysfunctional options pattern
-
 func (c *CLIConfig) WithFlagErrorHandling(h flag.ErrorHandling) *CLIConfig {
 	c.flagErrorHandling = h
 	return c
