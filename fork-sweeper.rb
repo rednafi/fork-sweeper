@@ -5,20 +5,20 @@
 class ForkSweeper < Formula
   desc "Remove unused GitHub forks"
   homepage "https://github.com/rednafi/fork-sweeper"
-  version "0.1.1"
+  version "0.1.2"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.1/fork-sweeper_Darwin_arm64.tar.gz"
-      sha256 "11020d730f598d59e28dd052190a88036f2f0ff8fa89357d52178298903d9d1f"
+      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.2/fork-sweeper_Darwin_arm64.tar.gz"
+      sha256 "0d113b20bb8e66353729454ec46482ce60aa2bdde89e0fc71a11dabc60c051b0"
 
       def install
         bin.install "fork-sweeper"
       end
     end
     if Hardware::CPU.intel?
-      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.1/fork-sweeper_Darwin_x86_64.tar.gz"
-      sha256 "08afaa6390cb022aac0abdbb3fbd1189e533ef10e320222485e1d39ed1f62592"
+      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.2/fork-sweeper_Darwin_x86_64.tar.gz"
+      sha256 "7543673fbe45c147769639c81fee7f0c92146dd05df60bcc18e39c672258f9f0"
 
       def install
         bin.install "fork-sweeper"
@@ -27,17 +27,17 @@ class ForkSweeper < Formula
   end
 
   on_linux do
-    if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.1/fork-sweeper_Linux_arm64.tar.gz"
-      sha256 "c047d4f5c387a86d900779232d99c8a944781e6d2e3334b4acc2d649364ed3c7"
+    if Hardware::CPU.intel?
+      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.2/fork-sweeper_Linux_x86_64.tar.gz"
+      sha256 "c7afde40810d80d9a267a77d091c3c6279b346a632b4ed0307aa517a4140eb70"
 
       def install
         bin.install "fork-sweeper"
       end
     end
-    if Hardware::CPU.intel?
-      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.1/fork-sweeper_Linux_x86_64.tar.gz"
-      sha256 "5e417b0597f8dfa87066b3e806fd4e5b9b238507022d2dc8d68f6246e136a1ad"
+    if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
+      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.2/fork-sweeper_Linux_arm64.tar.gz"
+      sha256 "934edd28af374f0e185376c955788dc350433511d5b346faab29ca4f7f7e4e7a"
 
       def install
         bin.install "fork-sweeper"
