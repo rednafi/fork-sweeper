@@ -52,9 +52,9 @@ Remove unused GitHub forks
       -delete
             Delete forked repos
       -max-page int
-            Maximum page number to fetch (default 100)
+            Maximum number of pages to fetch (default 100)
       -older-than-days int
-            Delete forked repos older than this number of days (default 60)
+            Fetch forked repos older than this number of days (default 60)
       -owner string
             GitHub repo owner (required)
       -per-page int
@@ -62,6 +62,7 @@ Remove unused GitHub forks
       -token string
             GitHub access token (required)
       -version
+            Print version
     ```
 
 -   List forked repos older than `n` days. By default, it'll fetch all repositories that

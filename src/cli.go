@@ -7,17 +7,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 )
 
 const (
-	Red    = "\033[31m"
-	Green  = "\033[32m"
-	Yellow = "\033[33m"
-	Blue   = "\033[34m"
-	Reset  = "\033[0m"
+	exitOk  = 0
+	exitErr = 1
 )
 
 type repo struct {
@@ -170,20 +166,15 @@ func deleteRepos(ctx context.Context, baseURL, token string, repos []repo) error
 	return nil
 }
 
-func printWithColor(color, text string) {
-	fmt.Println(color + text + Reset)
-}
-
-type CLIConfig struct {
+type cliConfig struct {
 
 	// Required
-	writer   io.Writer
-	version  string
-	exitFunc func(int)
+	stdout  io.Writer
+	stderr  io.Writer
+	version string
 
 	// Optional
 	flagErrorHandling flag.ErrorHandling
-	printWithColor    func(color, text string)
 	fetchForkedRepos  func(
 		ctx context.Context,
 		baseURL,
@@ -196,17 +187,12 @@ type CLIConfig struct {
 }
 
 // Dysfunctional options pattern
-func (c *CLIConfig) WithFlagErrorHandling(h flag.ErrorHandling) *CLIConfig {
+func (c *cliConfig) withFlagErrorHandling(h flag.ErrorHandling) *cliConfig {
 	c.flagErrorHandling = h
 	return c
 }
 
-func (c *CLIConfig) WithPrintWithColor(f func(color, text string)) *CLIConfig {
-	c.printWithColor = printWithColor
-	return c
-}
-
-func (c *CLIConfig) WithFetchForkedRepos(
+func (c *cliConfig) withFetchForkedRepos(
 	f func(
 		ctx context.Context,
 		baseURL,
@@ -214,57 +200,57 @@ func (c *CLIConfig) WithFetchForkedRepos(
 		token string,
 		perPage,
 		maxPage,
-		olderThanDays int) ([]repo, error)) *CLIConfig {
+		olderThanDays int) ([]repo, error)) *cliConfig {
 
 	c.fetchForkedRepos = f
 	return c
 }
 
-func (c *CLIConfig) WithDeleteRepos(
-	f func(ctx context.Context, baseURL, token string, repos []repo) error) *CLIConfig {
+func (c *cliConfig) withDeleteRepos(
+	f func(ctx context.Context, baseURL, token string, repos []repo) error) *cliConfig {
 
 	c.deleteRepos = f
 	return c
 }
 
 func NewCLIConfig(
-	writer io.Writer,
+	stdout,
+	stderr io.Writer,
 	version string,
-	exitFunc func(int),
-) *CLIConfig {
+) *cliConfig {
 
-	return &CLIConfig{
-		writer:            writer,
-		version:           version,
-		exitFunc:          exitFunc,
+	return &cliConfig{
+		stdout:  stdout,
+		stderr:  stderr,
+		version: version,
+
 		flagErrorHandling: flag.ExitOnError,
-		printWithColor:    printWithColor,
 		fetchForkedRepos:  fetchForkedRepos,
 		deleteRepos:       deleteRepos,
 	}
 }
 
-func (c *CLIConfig) CLI(args []string) {
+func (c *cliConfig) CLI(args []string) int {
 	var (
-		owner             string
-		token             string
-		perPage           int
-		maxPage           int
-		olderThanDays     int
-		version           bool
-		delete            bool
-		writer            = c.writer
+		owner         string
+		token         string
+		perPage       int
+		maxPage       int
+		olderThanDays int
+		version       bool
+		delete        bool
+
+		stdout            = c.stdout
+		stderr            = c.stderr
 		versionNum        = c.version
-		exitFunc          = c.exitFunc
 		flagErrorHandling = c.flagErrorHandling
-		printWithColor    = c.printWithColor
 		fetchForkedRepos  = c.fetchForkedRepos
 		deleteRepos       = c.deleteRepos
 	)
 
 	// Parsing command-line flags
 	fs := flag.NewFlagSet("fork-sweeper", flagErrorHandling)
-	fs.SetOutput(writer)
+	fs.SetOutput(stdout)
 
 	fs.StringVar(&owner, "owner", "", "GitHub repo owner (required)")
 	fs.StringVar(&token, "token", "", "GitHub access token (required)")
@@ -277,26 +263,27 @@ func (c *CLIConfig) CLI(args []string) {
 		"Fetch forked repos older than this number of days")
 	fs.BoolVar(&version, "version", false, "Print version")
 	fs.BoolVar(&delete, "delete", false, "Delete forked repos")
+
 	fs.Parse(args)
 
 	// Printing version
 	if version {
-		fmt.Println(versionNum)
-		return
+		fmt.Fprintln(stdout, versionNum)
+		return exitOk
 	}
 
 	// Validating required arguments
 	if owner == "" || token == "" {
-		fmt.Fprintf(os.Stderr, "%sError:%s Owner and token are required.\n", Red, Reset)
+		fmt.Fprintln(stderr, "Error: owner and token are required")
 		fs.PrintDefaults()
-		exitFunc(1)
+		return exitErr
 	}
 
 	ctx := context.Background()
 	baseURL := "https://api.github.com"
 
 	// Fetching repositories
-	printWithColor(Blue, fmt.Sprintf("\nFetching repositories for %s...\n", owner))
+	fmt.Fprintf(stdout, "\nFetching repositories for %s...\n", owner)
 	forkedRepos, err := fetchForkedRepos(
 		ctx,
 		baseURL,
@@ -307,30 +294,32 @@ func (c *CLIConfig) CLI(args []string) {
 		olderThanDays)
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%sError fetching repositories:%s %v\n", Red, Reset, err)
-		exitFunc(1)
+		fmt.Fprintf(stderr, "\nError fetching repositories: %v\n", err)
+		return exitErr
 	}
 
 	if len(forkedRepos) == 0 {
-		printWithColor(Green, "No forked repositories found.")
-		return
+		fmt.Fprintf(stdout, "\nNo forked repositories found\n")
+		return exitOk
 	}
 
 	// Listing forked repositories
-	printWithColor(Blue, "Forked repos:\n")
+	fmt.Fprintf(stdout, "\nForked repos:\n")
 	for _, repo := range forkedRepos {
-		fmt.Println("  - ", repo.Name)
+		fmt.Fprintf(stdout, "    - %s\n", repo.URL)
 	}
 
 	// Deleting forked repositories
 	if !delete {
-		return
+		return exitOk
 	}
 
-	printWithColor(Blue, "\nDeleting forked repositories...\n")
+	fmt.Fprintf(stdout, "\nDeleting forked repositories...\n")
 	if err := deleteRepos(ctx, baseURL, token, forkedRepos); err != nil {
-		fmt.Fprintf(os.Stderr, "%sError deleting repositories:%s %v\n", Red, Reset, err)
-		exitFunc(1)
+		fmt.Fprintf(stderr, "Error deleting repositories: %v \n", err)
+		return exitErr
 	}
-	printWithColor(Green, "Deletion completed successfully.")
+
+	fmt.Fprintf(stdout, "\nForks deleted successfully\n")
+	return exitOk
 }
