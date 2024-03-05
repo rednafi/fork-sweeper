@@ -12,8 +12,11 @@ import (
 )
 
 const (
-	exitOk  = 0
-	exitErr = 1
+	exitOk             = 0
+	exitErr            = 1
+	userNotFoundErr    = "API request failed with status: 404"
+	invalidTokenErr    = "API request failed with status: 401"
+	tokenPermissionErr = "API request failed with status: 403"
 )
 
 type repo struct {
@@ -294,7 +297,14 @@ func (c *cliConfig) CLI(args []string) int {
 		olderThanDays)
 
 	if err != nil {
-		fmt.Fprintf(stderr, "\nError fetching repositories: %v\n", err)
+		switch err.Error() {
+		case userNotFoundErr:
+			fmt.Fprintf(stderr, "Error: user not found\n")
+		case invalidTokenErr:
+			fmt.Fprintf(stderr, "Error: invalid token\n")
+		default:
+			fmt.Fprintf(stderr, "Error: %s\n", err)
+		}
 		return exitErr
 	}
 
@@ -316,7 +326,12 @@ func (c *cliConfig) CLI(args []string) int {
 
 	fmt.Fprintf(stdout, "\nDeleting forked repositories...\n")
 	if err := deleteRepos(ctx, baseURL, token, forkedRepos); err != nil {
-		fmt.Fprintf(stderr, "Error deleting repositories: %v \n", err)
+		switch err.Error() {
+		case tokenPermissionErr:
+			fmt.Fprintf(stderr, "Error: token does not have permission to delete repos\n")
+		default:
+			fmt.Fprintf(stderr, "Error: %s\n", err)
+		}
 		return exitErr
 	}
 
