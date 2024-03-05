@@ -269,12 +269,12 @@ func (c *CLIConfig) CLI(args []string) {
 	fs.StringVar(&owner, "owner", "", "GitHub repo owner (required)")
 	fs.StringVar(&token, "token", "", "GitHub access token (required)")
 	fs.IntVar(&perPage, "per-page", 100, "Number of forked repos fetched per page")
-	fs.IntVar(&maxPage, "max-page", 100, "Maximum page number to fetch")
+	fs.IntVar(&maxPage, "max-page", 100, "Maximum number of pages to fetch")
 	fs.IntVar(
 		&olderThanDays,
 		"older-than-days",
 		60,
-		"Delete forked repos older than this number of days")
+		"Fetch forked repos older than this number of days")
 	fs.BoolVar(&version, "version", false, "Print version")
 	fs.BoolVar(&delete, "delete", false, "Delete forked repos")
 	fs.Parse(args)
