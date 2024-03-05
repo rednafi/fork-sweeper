@@ -64,8 +64,8 @@ Remove unused GitHub forks
       -version
     ```
 
--   List forked repos older than `n` days. By default, it'll fetch all reposties that were
-    forked at least 60 days ago.
+-   List forked repos older than `n` days. By default, it'll fetch all repositories that
+    were forked at least 60 days ago.
 
     ```sh
     fork-sweeper --owner rednafi --token $GITHUB_TOKEN --older-than-days 60
