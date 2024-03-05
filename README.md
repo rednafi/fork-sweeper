@@ -78,5 +78,12 @@ Remove unused GitHub forks
     fork-sweeper --owner rednafi --token $GITHUB_TOKEN --delete
     ```
 
+-   By default, the CLI will fetch 100 pages of forked repositories with 100 entries in each
+    page. If you need more, you can set the page number as follows:
+
+    ```sh
+    fork-sweeper --owner rednafi --token $GITHUB_TOKEN --max-page 200 --per-page 100
+    ```
+
 [access token]:
     https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api?apiVersion=2022-11-28
