@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/rednafi/fork-sweeper/src"
 	"os"
+
+	"github.com/rednafi/fork-sweeper/src"
 )
 
 // Ldflags filled by goreleaser

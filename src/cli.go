@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	exitOk             = 0
-	exitErr            = 1
-	userNotFoundErr    = "API request failed with status: 404"
-	invalidTokenErr    = "API request failed with status: 401"
-	tokenPermissionErr = "API request failed with status: 403"
+	exitOk  = 0
+	exitErr = 1
+
+	errUserNotFound                = "API request failed with status: 404"
+	errInvalidToken                = "API request failed with status: 401"
+	errInsufficientTokenPermission = "API request failed with status: 403"
 )
 
 type repo struct {
@@ -170,7 +171,6 @@ func deleteRepos(ctx context.Context, baseURL, token string, repos []repo) error
 }
 
 type cliConfig struct {
-
 	// Required
 	stdout  io.Writer
 	stderr  io.Writer
@@ -187,6 +187,23 @@ type cliConfig struct {
 		maxPage,
 		olderThanDays int) ([]repo, error)
 	deleteRepos func(ctx context.Context, baseURL, token string, repos []repo) error
+}
+
+func NewCLIConfig(
+	stdout,
+	stderr io.Writer,
+	version string,
+) *cliConfig {
+
+	return &cliConfig{
+		stdout:  stdout,
+		stderr:  stderr,
+		version: version,
+
+		flagErrorHandling: flag.ExitOnError,
+		fetchForkedRepos:  fetchForkedRepos,
+		deleteRepos:       deleteRepos,
+	}
 }
 
 // Dysfunctional options pattern
@@ -214,23 +231,6 @@ func (c *cliConfig) withDeleteRepos(
 
 	c.deleteRepos = f
 	return c
-}
-
-func NewCLIConfig(
-	stdout,
-	stderr io.Writer,
-	version string,
-) *cliConfig {
-
-	return &cliConfig{
-		stdout:  stdout,
-		stderr:  stderr,
-		version: version,
-
-		flagErrorHandling: flag.ExitOnError,
-		fetchForkedRepos:  fetchForkedRepos,
-		deleteRepos:       deleteRepos,
-	}
 }
 
 func (c *cliConfig) CLI(args []string) int {
@@ -298,16 +298,15 @@ func (c *cliConfig) CLI(args []string) int {
 
 	if err != nil {
 		switch err.Error() {
-		case userNotFoundErr:
+		case errUserNotFound:
 			fmt.Fprintf(stderr, "Error: user not found\n")
-		case invalidTokenErr:
+		case errInvalidToken:
 			fmt.Fprintf(stderr, "Error: invalid token\n")
 		default:
 			fmt.Fprintf(stderr, "Error: %s\n", err)
 		}
 		return exitErr
 	}
-
 	if len(forkedRepos) == 0 {
 		fmt.Fprintf(stdout, "\nNo forked repositories found\n")
 		return exitOk
@@ -327,7 +326,7 @@ func (c *cliConfig) CLI(args []string) int {
 	fmt.Fprintf(stdout, "\nDeleting forked repositories...\n")
 	if err := deleteRepos(ctx, baseURL, token, forkedRepos); err != nil {
 		switch err.Error() {
-		case tokenPermissionErr:
+		case errInsufficientTokenPermission:
 			fmt.Fprintf(stderr, "Error: token does not have permission to delete repos\n")
 		default:
 			fmt.Fprintf(stderr, "Error: %s\n", err)
