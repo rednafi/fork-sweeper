@@ -8,17 +8,17 @@ class ForkSweeper < Formula
   version "0.1.3"
 
   on_macos do
-    if Hardware::CPU.arm?
-      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.3/fork-sweeper_Darwin_arm64.tar.gz"
-      sha256 "285f5f588fe0776f2a052261c9895f885495456195ad73f005482bb012519ad9"
+    if Hardware::CPU.intel?
+      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.3/fork-sweeper_Darwin_x86_64.tar.gz"
+      sha256 "a45668a0f295340bf273430299e062c90065fd1ee92b39ab3088215b6a7b4c6c"
 
       def install
         bin.install "fork-sweeper"
       end
     end
-    if Hardware::CPU.intel?
-      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.3/fork-sweeper_Darwin_x86_64.tar.gz"
-      sha256 "c41ffaeb22b78ce2e15403b9ed672c73194f273a91a2463383179ac21842142d"
+    if Hardware::CPU.arm?
+      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.3/fork-sweeper_Darwin_arm64.tar.gz"
+      sha256 "74d576de590b4eb19cd7723adc5788fb357189b082a582b234e1fab873446c2e"
 
       def install
         bin.install "fork-sweeper"
@@ -27,17 +27,17 @@ class ForkSweeper < Formula
   end
 
   on_linux do
-    if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.3/fork-sweeper_Linux_arm64.tar.gz"
-      sha256 "58fbda0bec5b8d15a7d2e11fbc4f8f619b6b9e4c329912ad60dda06a6ff61db4"
+    if Hardware::CPU.intel?
+      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.3/fork-sweeper_Linux_x86_64.tar.gz"
+      sha256 "ab7dc5d0936e03acbaa679084f1b794645e9a5e1059a34862258190c46022d48"
 
       def install
         bin.install "fork-sweeper"
       end
     end
-    if Hardware::CPU.intel?
-      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.3/fork-sweeper_Linux_x86_64.tar.gz"
-      sha256 "ab67f17504d50f37d276e8ebf149dd0e41470da36ca44523aa7a54c409d958cc"
+    if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
+      url "https://github.com/rednafi/fork-sweeper/releases/download/v0.1.3/fork-sweeper_Linux_arm64.tar.gz"
+      sha256 "e70716a2073eedcd1ec5aa13fc85e2e0233e637c599b3cd268c6c35b4f6af9d6"
 
       def install
         bin.install "fork-sweeper"
