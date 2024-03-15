@@ -87,13 +87,14 @@ func fetchForkedRepos(
 	var allRepos []repo
 	for pageNum := 1; pageNum <= maxPage; pageNum++ {
 		repos, err := fetchForkedReposPage(
-			ctx,
-			baseURL,
-			owner,
-			token,
-			pageNum,
-			perPage,
-			olderThanDays)
+			ctx,           // ctx
+			baseURL,       // baseURL
+			owner,         // owner
+			token,         // token
+			pageNum,       // pageNum
+			perPage,       // perPage
+			olderThanDays, // olderThanDays
+		)
 
 		if err != nil {
 			return nil, err
@@ -287,13 +288,14 @@ func (c *cliConfig) CLI(args []string) int {
 	// Fetching repositories
 	fmt.Fprintf(stdout, "\nFetching repositories for %s...\n", owner)
 	forkedRepos, err := fetchForkedRepos(
-		ctx,
-		baseURL,
-		owner,
-		token,
-		perPage,
-		maxPage,
-		olderThanDays)
+		ctx,           // ctx
+		baseURL,       // baseURL
+		owner,         // owner
+		token,         // token
+		perPage,       // perPage
+		maxPage,       // maxPage
+		olderThanDays, // olderThanDays
+	)
 
 	if err != nil {
 		switch err.Error() {
