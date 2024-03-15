@@ -21,7 +21,7 @@ const (
 )
 
 type repo struct {
-	Name   string `json:"full_name"`
+	Name   string `json:"name"`
 	URL    string `json:"html_url"`
 	IsFork bool   `json:"fork"`
 	Owner  struct {

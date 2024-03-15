@@ -19,24 +19,24 @@ func TestUnmarshalRepo(t *testing.T) {
 	t.Parallel()
 	// Example JSON string that represents a repo's data
 	jsonString := `{
-		"full_name": "example/repo",
-		"html_url": "https://github.com/example/repo",
+		"name": "test-repo",
+		"html_url": "https://github.com/test-owner/test-repo",
 		"fork": false,
 		"owner": {
-			"name": "example"
+			"name": "test-owner"
 		},
 		"updated_at": "2020-01-01T00:00:00Z"
 	}`
 
 	// Expected repo object based on the JSON string
 	expected := repo{
-		Name:   "example/repo",
-		URL:    "https://github.com/example/repo",
+		Name:   "test-repo",
+		URL:    "https://github.com/test-owner/test-repo",
 		IsFork: false,
 		Owner: struct {
 			Name string `json:"name"`
 		}{
-			Name: "example",
+			Name: "test-owner",
 		},
 		UpdatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
@@ -65,26 +65,34 @@ func TestFetchForkedReposPage(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintln(
 				w,
-				`[{"full_name": "example/forkedrepo",`+
-					`"html_url": "https://github.com/example/forkedrepo", "fork": true,`+
-					`"owner": {"name": "example"}, "updated_at": "2020-01-01T00:00:00Z"}]`)
+				`[{"name": "test-forked-repo",`+
+					`"html_url": "https://github.com/test-owner/test-forked-repo", "fork": true,`+
+					`"owner": {"name": "test-owner"}, "updated_at": "2020-01-01T00:00:00Z"}]`)
 		}))
 	defer mockServer.Close()
 
 	expected := []repo{
 		{
-			Name:   "example/forkedrepo",
-			URL:    "https://github.com/example/forkedrepo",
+			Name:   "test-forked-repo",
+			URL:    "https://github.com/test-owner/test-forked-repo",
 			IsFork: true,
 			Owner: struct {
 				Name string `json:"name"`
-			}{Name: "example"},
+			}{Name: "test-owner"},
 			UpdatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 	}
 
 	forkedRepos, err := fetchForkedReposPage(
-		context.Background(), mockServer.URL, "example", "fake-token", 1, 10, 60)
+		context.Background(), // ctx
+		mockServer.URL,       // baseURL
+		"test-owner",         // owner
+		"test-token",         // token
+		1,                    // pageNum
+		10,                   // perPage
+		60,                   // olderThanDays
+	)
+
 	if err != nil {
 		t.Fatalf("fetchForkedReposPage returned an error: %v", err)
 	}
@@ -112,13 +120,13 @@ func TestFetchForkedRepos(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintln(
 				w,
-				`[{"full_name": "example/forkedrepo",`+
-					`"html_url": "https://test.com/example/forkedrepo", "fork": true,`+
-					`"owner": {"name": "example"}, "updated_at": "2020-01-01T00:00:00Z"},`+
+				`[{"name": "test-repo-1",`+
+					`"html_url": "https://test.com/test-owner/test-repo-1", "fork": true,`+
+					`"owner": {"name": "test-owner"}, "updated_at": "2020-01-01T00:00:00Z"},`+
 
-					`{"full_name": "example/forkedrepo2",`+
-					`"html_url": "https://test.com/example/forkedrepo2", "fork": true,`+
-					`"owner": {"name": "example2"}, "updated_at": "2020-01-01T00:00:00Z"}]`)
+					`{"name": "test-repo-2",`+
+					`"html_url": "https://test.com/test-owner/test-repo-2", "fork": true,`+
+					`"owner": {"name": "test-owner"}, "updated_at": "2020-01-01T00:00:00Z"}]`)
 
 		}))
 
@@ -126,33 +134,34 @@ func TestFetchForkedRepos(t *testing.T) {
 
 	expected := []repo{
 		{
-			Name:   "example/forkedrepo",
-			URL:    "https://test.com/example/forkedrepo",
+			Name:   "test-repo-1",
+			URL:    "https://test.com/test-owner/test-repo-1",
 			IsFork: true,
 			Owner: struct {
 				Name string `json:"name"`
-			}{Name: "example"},
+			}{Name: "test-owner"},
 			UpdatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
-			Name:   "example/forkedrepo2",
-			URL:    "https://test.com/example/forkedrepo2",
+			Name:   "test-repo-2",
+			URL:    "https://test.com/test-owner/test-repo-2",
 			IsFork: true,
 			Owner: struct {
 				Name string `json:"name"`
-			}{Name: "example2"},
+			}{Name: "test-owner"},
 			UpdatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 	}
 
 	forkedRepos, err := fetchForkedRepos(
-		context.Background(),
-		mockServer.URL,
-		"example",
-		"fake-token",
-		10,
-		1,
-		60)
+		context.Background(), // ctx
+		mockServer.URL,       // baseURL
+		"test-owner",         // owner
+		"test-token",         // token
+		10,                   // perPage
+		1,                    // maxPage
+		60,                   // olderThanDays
+	)
 	if err != nil {
 		t.Fatalf("fetchForkedRepos returned an error: %v", err)
 	}
