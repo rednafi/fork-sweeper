@@ -49,20 +49,20 @@ Remove unused GitHub forks
 
     ```txt
     Usage of fork-sweeper:
-      -delete
-            Delete forked repos
-      -max-page int
-            Maximum number of pages to fetch (default 100)
-      -older-than-days int
-            Fetch forked repos older than this number of days (default 60)
-      -owner string
-            GitHub repo owner (required)
-      -per-page int
-            Number of forked repos fetched per page (default 100)
-      -token string
-            GitHub access token (required)
-      -version
-            Print version
+       -delete
+             Delete forked repos
+       -max-page int
+             Maximum number of pages to fetch (default 100)
+       -older-than-days int
+             Fetch forked repos modified more than n days ago (default 60)
+       -owner string
+             GitHub repo owner (required)
+       -per-page int
+             Number of forked repos fetched per page (default 100)
+       -token string
+             GitHub access token (required)
+       -version
+             Print version
     ```
 
 -   List forked repos older than `n` days. By default, it'll fetch all repositories that

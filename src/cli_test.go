@@ -25,7 +25,7 @@ func TestUnmarshalRepo(t *testing.T) {
 		"owner": {
 			"name": "example"
 		},
-		"created_at": "2020-01-01T00:00:00Z"
+		"updated_at": "2020-01-01T00:00:00Z"
 	}`
 
 	// Expected repo object based on the JSON string
@@ -38,7 +38,7 @@ func TestUnmarshalRepo(t *testing.T) {
 		}{
 			Name: "example",
 		},
-		CreatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 
 	// Unmarshal the JSON string into a repo struct
@@ -67,7 +67,7 @@ func TestFetchForkedReposPage(t *testing.T) {
 				w,
 				`[{"full_name": "example/forkedrepo",`+
 					`"html_url": "https://github.com/example/forkedrepo", "fork": true,`+
-					`"owner": {"name": "example"}, "created_at": "2020-01-01T00:00:00Z"}]`)
+					`"owner": {"name": "example"}, "updated_at": "2020-01-01T00:00:00Z"}]`)
 		}))
 	defer mockServer.Close()
 
@@ -79,7 +79,7 @@ func TestFetchForkedReposPage(t *testing.T) {
 			Owner: struct {
 				Name string `json:"name"`
 			}{Name: "example"},
-			CreatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+			UpdatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 	}
 
@@ -98,7 +98,7 @@ func TestFetchForkedReposPage(t *testing.T) {
 			repo.URL != expected[i].URL ||
 			repo.IsFork != expected[i].IsFork ||
 			repo.Owner.Name != expected[i].Owner.Name ||
-			!repo.CreatedAt.Equal(expected[i].CreatedAt) {
+			!repo.UpdatedAt.Equal(expected[i].UpdatedAt) {
 			t.Errorf("Expected repo %+v, got %+v", expected[i], repo)
 		}
 	}
@@ -114,11 +114,11 @@ func TestFetchForkedRepos(t *testing.T) {
 				w,
 				`[{"full_name": "example/forkedrepo",`+
 					`"html_url": "https://test.com/example/forkedrepo", "fork": true,`+
-					`"owner": {"name": "example"}, "created_at": "2020-01-01T00:00:00Z"},`+
+					`"owner": {"name": "example"}, "updated_at": "2020-01-01T00:00:00Z"},`+
 
 					`{"full_name": "example/forkedrepo2",`+
 					`"html_url": "https://test.com/example/forkedrepo2", "fork": true,`+
-					`"owner": {"name": "example2"}, "created_at": "2020-01-01T00:00:00Z"}]`)
+					`"owner": {"name": "example2"}, "updated_at": "2020-01-01T00:00:00Z"}]`)
 
 		}))
 
@@ -132,7 +132,7 @@ func TestFetchForkedRepos(t *testing.T) {
 			Owner: struct {
 				Name string `json:"name"`
 			}{Name: "example"},
-			CreatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+			UpdatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			Name:   "example/forkedrepo2",
@@ -141,7 +141,7 @@ func TestFetchForkedRepos(t *testing.T) {
 			Owner: struct {
 				Name string `json:"name"`
 			}{Name: "example2"},
-			CreatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+			UpdatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 	}
 
@@ -166,7 +166,7 @@ func TestFetchForkedRepos(t *testing.T) {
 			repo.URL != expected[i].URL ||
 			repo.IsFork != expected[i].IsFork ||
 			repo.Owner.Name != expected[i].Owner.Name ||
-			!repo.CreatedAt.Equal(expected[i].CreatedAt) {
+			!repo.UpdatedAt.Equal(expected[i].UpdatedAt) {
 			t.Errorf("Expected repo %+v, got %+v", expected[i], repo)
 		}
 	}
@@ -219,9 +219,10 @@ func TestDoRequest(t *testing.T) {
 
 			// Attempt to decode into this variable
 			var result map[string]interface{}
+			var token string
 
 			// Call doRequest with the mock server's URL
-			err := doRequest(req, &result)
+			err := doRequest(req, token, &result)
 
 			// Check for error existence
 			if (err != nil) != tt.wantErr {
@@ -390,7 +391,7 @@ func TestCLI_Success(t *testing.T) {
 		withFlagErrorHandling(mockFlagErrorHandler)
 
 	// Execute the CLI
-	args := []string{"--owner", "testOwner", "--token", "testToken", "--older-than", "30"}
+	args := []string{"--owner", "testOwner", "--token", "testToken", "--older-than-days", "30"}
 
 	exitCode := cliConfig.CLI(args)
 

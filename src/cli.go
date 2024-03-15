@@ -27,7 +27,7 @@ type repo struct {
 	Owner  struct {
 		Name string `json:"name"`
 	} `json:"owner"`
-	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 var httpClientPool = sync.Pool{
@@ -57,10 +57,8 @@ func fetchForkedReposPage(
 		return nil, err
 	}
 
-	req.Header.Add("Authorization", "Bearer "+token)
-
 	var repos []repo
-	if err := doRequest(req, &repos); err != nil {
+	if err := doRequest(req, token, &repos); err != nil {
 		return nil, err
 	}
 
@@ -69,7 +67,7 @@ func fetchForkedReposPage(
 	cutOffDate := time.Now().AddDate(0, 0, -olderThanDays)
 
 	for _, repo := range repos {
-		if repo.IsFork && repo.CreatedAt.Before(cutOffDate) {
+		if repo.IsFork && repo.UpdatedAt.Before(cutOffDate) {
 			forkedRepos = append(forkedRepos, repo)
 		}
 	}
@@ -110,9 +108,12 @@ func fetchForkedRepos(
 	return allRepos, nil
 }
 
-func doRequest(req *http.Request, v any) error {
+func doRequest(req *http.Request, token string, result any) error {
 	httpClient := httpClientPool.Get().(*http.Client)
 	defer httpClientPool.Put(httpClient)
+
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("Accept", "application/vnd.github.v3+json")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -124,8 +125,8 @@ func doRequest(req *http.Request, v any) error {
 		return fmt.Errorf("API request failed with status: %d", resp.StatusCode)
 	}
 
-	if v != nil {
-		if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+	if result != nil {
+		if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
 			return err
 		}
 	}
@@ -138,10 +139,8 @@ func deleteRepo(ctx context.Context, baseURL, owner, name, token string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Add("Authorization", "Bearer "+token)
-	req.Header.Add("Accept", "application/vnd.github.v3+json")
 
-	return doRequest(req, nil)
+	return doRequest(req, token, nil)
 }
 
 func deleteRepos(ctx context.Context, baseURL, token string, repos []repo) error {
@@ -263,7 +262,7 @@ func (c *cliConfig) CLI(args []string) int {
 		&olderThanDays,
 		"older-than-days",
 		60,
-		"Fetch forked repos older than this number of days")
+		"Fetch forked repos modified more than n days ago")
 	fs.BoolVar(&version, "version", false, "Print version")
 	fs.BoolVar(&delete, "delete", false, "Delete forked repos")
 
