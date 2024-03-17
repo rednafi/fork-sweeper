@@ -28,7 +28,9 @@ type repo struct {
 	Owner  struct {
 		Name string `json:"login"`
 	} `json:"owner"`
+	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	PushedAt  time.Time `json:"pushed_at"`
 }
 
 var httpClientPool = sync.Pool{
@@ -138,7 +140,8 @@ func filterForkedRepos(
 	cutOffDate := time.Now().AddDate(0, 0, -olderThanDays)
 
 	for _, repo := range forkedRepos {
-		if repo.UpdatedAt.After(cutOffDate) {
+		if repo.CreatedAt.After(cutOffDate) ||
+			repo.UpdatedAt.After(cutOffDate) || repo.PushedAt.After(cutOffDate) {
 			guardedRepos = append(guardedRepos, repo)
 			continue
 		}
