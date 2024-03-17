@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -15,9 +16,9 @@ const (
 	exitOk  = 0
 	exitErr = 1
 
-	errUserNotFound                = "API request failed with status: 404"
-	errInvalidToken                = "API request failed with status: 401"
-	errInsufficientTokenPermission = "API request failed with status: 403"
+	userNotFoundMsg                = "API request failed with status: 404"
+	invalidTokenMsg                = "API request failed with status: 401"
+	insufficientTokenPermissionMsg = "API request failed with status: 403"
 )
 
 type repo struct {
@@ -25,7 +26,7 @@ type repo struct {
 	URL    string `json:"html_url"`
 	IsFork bool   `json:"fork"`
 	Owner  struct {
-		Name string `json:"name"`
+		Name string `json:"login"`
 	} `json:"owner"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -42,8 +43,7 @@ func fetchForkedReposPage(
 	owner,
 	token string,
 	pageNum,
-	perPage,
-	olderThanDays int) ([]repo, error) {
+	perPage int) ([]repo, error) {
 
 	url := fmt.Sprintf(
 		"%s/users/%s/repos?type=forks&page=%d&per_page=%d",
@@ -63,15 +63,11 @@ func fetchForkedReposPage(
 	}
 
 	var forkedRepos []repo
-
-	cutOffDate := time.Now().AddDate(0, 0, -olderThanDays)
-
-	for _, repo := range repos {
-		if repo.IsFork && repo.UpdatedAt.Before(cutOffDate) {
-			forkedRepos = append(forkedRepos, repo)
+	for _, r := range repos {
+		if r.IsFork {
+			forkedRepos = append(forkedRepos, r)
 		}
 	}
-
 	return forkedRepos, nil
 }
 
@@ -81,19 +77,17 @@ func fetchForkedRepos(
 	owner,
 	token string,
 	perPage,
-	maxPage,
-	olderThanDays int) ([]repo, error) {
+	maxPage int) ([]repo, error) {
 
 	var allRepos []repo
 	for pageNum := 1; pageNum <= maxPage; pageNum++ {
 		repos, err := fetchForkedReposPage(
-			ctx,           // ctx
-			baseURL,       // baseURL
-			owner,         // owner
-			token,         // token
-			pageNum,       // pageNum
-			perPage,       // perPage
-			olderThanDays, // olderThanDays
+			ctx,     // ctx
+			baseURL, // baseURL
+			owner,   // owner
+			token,   // token
+			pageNum, // pageNum
+			perPage, // perPage
 		)
 
 		if err != nil {
@@ -134,8 +128,43 @@ func doRequest(req *http.Request, token string, result any) error {
 	return nil
 }
 
+// filterForkedRepos filters forked repositories based on their update date and whether their name matches any in the protectedRepos list using a basic form of fuzzy matching.
+func filterForkedRepos(
+	forkedRepos []repo,
+	guardedRepoNames []string,
+	olderThanDays int) ([]repo, []repo) {
+
+	unguardedRepos, guardedRepos := make([]repo, 0), make([]repo, 0)
+	cutOffDate := time.Now().AddDate(0, 0, -olderThanDays)
+
+	for _, repo := range forkedRepos {
+		if repo.UpdatedAt.After(cutOffDate) {
+			guardedRepos = append(guardedRepos, repo)
+			continue
+		}
+
+		guarded := false
+		for _, guardedRepoName := range guardedRepoNames {
+			// Simple fuzzy match: check if protectedRepo is contained within repo.Name
+			if strings.Contains(strings.ToLower(repo.Name), strings.ToLower(guardedRepoName)) {
+				guarded = true
+				break
+			}
+		}
+
+		if guarded {
+			guardedRepos = append(guardedRepos, repo)
+		} else {
+			unguardedRepos = append(unguardedRepos, repo)
+		}
+	}
+
+	return unguardedRepos, guardedRepos
+}
+
 func deleteRepo(ctx context.Context, baseURL, owner, name, token string) error {
-	url := fmt.Sprintf("%s/repos%s/%s", baseURL, owner, name)
+	url := fmt.Sprintf("%s/repos/%s/%s", baseURL, owner, name)
+
 	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return err
@@ -184,8 +213,13 @@ type cliConfig struct {
 		owner,
 		token string,
 		perPage,
-		maxPage,
-		olderThanDays int) ([]repo, error)
+		maxPage int) ([]repo, error)
+
+	filterForkedRepos func(
+		forkedRepos []repo,
+		protectedRepos []string,
+		olderThanDays int) ([]repo, []repo)
+
 	deleteRepos func(ctx context.Context, baseURL, token string, repos []repo) error
 }
 
@@ -219,10 +253,19 @@ func (c *cliConfig) withFetchForkedRepos(
 		owner,
 		token string,
 		perPage,
-		maxPage,
-		olderThanDays int) ([]repo, error)) *cliConfig {
+		maxPage int) ([]repo, error)) *cliConfig {
 
 	c.fetchForkedRepos = f
+	return c
+}
+
+func (c *cliConfig) withFilterForkedRepos(
+	f func(
+		forkedRepos []repo,
+		protectedRepos []string,
+		olderThanDays int) ([]repo, []repo)) *cliConfig {
+
+	c.filterForkedRepos = f
 	return c
 }
 
@@ -233,19 +276,31 @@ func (c *cliConfig) withDeleteRepos(
 	return c
 }
 
+type stringSlice []string
+
+func (s *stringSlice) Set(value string) error {
+	*s = append(*s, value)
+	return nil
+}
+
+func (s *stringSlice) String() string {
+	return strings.Join(*s, ", ")
+}
+
 func (c *cliConfig) CLI(args []string) int {
 	var (
-		owner         string
-		token         string
-		perPage       int
-		maxPage       int
-		olderThanDays int
-		version       bool
-		delete        bool
+		owner          string
+		token          string
+		perPage        int
+		maxPage        int
+		olderThanDays  int
+		version        bool
+		delete         bool
+		protectedRepos stringSlice
 
 		stdout            = c.stdout
 		stderr            = c.stderr
-		versionNum        = c.version
+		versionNumber     = c.version
 		flagErrorHandling = c.flagErrorHandling
 		fetchForkedRepos  = c.fetchForkedRepos
 		deleteRepos       = c.deleteRepos
@@ -259,19 +314,19 @@ func (c *cliConfig) CLI(args []string) int {
 	fs.StringVar(&token, "token", "", "GitHub access token (required)")
 	fs.IntVar(&perPage, "per-page", 100, "Number of forked repos fetched per page")
 	fs.IntVar(&maxPage, "max-page", 100, "Maximum number of pages to fetch")
-	fs.IntVar(
-		&olderThanDays,
+	fs.IntVar(&olderThanDays,
 		"older-than-days",
 		60,
 		"Fetch forked repos modified more than n days ago")
 	fs.BoolVar(&version, "version", false, "Print version")
 	fs.BoolVar(&delete, "delete", false, "Delete forked repos")
+	fs.Var(&protectedRepos, "guard", "List of repos to protect from deletion (fuzzy match name)")
 
 	fs.Parse(args)
 
 	// Printing version
 	if version {
-		fmt.Fprintln(stdout, versionNum)
+		fmt.Fprintln(stdout, versionNumber)
 		return exitOk
 	}
 
@@ -286,22 +341,21 @@ func (c *cliConfig) CLI(args []string) int {
 	baseURL := "https://api.github.com"
 
 	// Fetching repositories
-	fmt.Fprintf(stdout, "\nFetching repositories for %s...\n", owner)
+	fmt.Fprintf(stdout, "\nFetching forked repositories for %s...\n", owner)
 	forkedRepos, err := fetchForkedRepos(
-		ctx,           // ctx
-		baseURL,       // baseURL
-		owner,         // owner
-		token,         // token
-		perPage,       // perPage
-		maxPage,       // maxPage
-		olderThanDays, // olderThanDays
+		ctx,     // ctx
+		baseURL, // baseURL
+		owner,   // owner
+		token,   // token
+		perPage, // perPage
+		maxPage, // maxPage
 	)
 
 	if err != nil {
 		switch err.Error() {
-		case errUserNotFound:
+		case userNotFoundMsg:
 			fmt.Fprintf(stderr, "Error: user not found\n")
-		case errInvalidToken:
+		case invalidTokenMsg:
 			fmt.Fprintf(stderr, "Error: invalid token\n")
 		default:
 			fmt.Fprintf(stderr, "Error: %s\n", err)
@@ -313,21 +367,38 @@ func (c *cliConfig) CLI(args []string) int {
 		return exitOk
 	}
 
-	// Listing forked repositories
-	fmt.Fprintf(stdout, "\nForked repos:\n")
-	for _, repo := range forkedRepos {
+	// Filtering repositories
+	unguardedRepos, guardedRepos := filterForkedRepos(
+		forkedRepos,
+		protectedRepos,
+		olderThanDays)
+
+	// Displaying safeguarded repositories
+	fmt.Fprintf(stdout, "\nGuarded forked repos (won't be deleted):\n")
+	for _, repo := range guardedRepos {
 		fmt.Fprintf(stdout, "    - %s\n", repo.URL)
 	}
 
-	// Deleting forked repositories
+	// Displaying unguarded repositories
+	fmt.Fprintf(stdout, "\nUnguarded forked repos (will be deleted):\n")
+	for _, repo := range unguardedRepos {
+		fmt.Fprintf(stdout, "    - %s\n", repo.URL)
+	}
+
+	// Deleting unguarded repositories
 	if !delete {
 		return exitOk
 	}
 
+	if len(unguardedRepos) == 0 {
+		fmt.Fprintf(stdout, "\nNo unguarded forked repositories to delete\n")
+		return exitOk
+	}
+
 	fmt.Fprintf(stdout, "\nDeleting forked repositories...\n")
-	if err := deleteRepos(ctx, baseURL, token, forkedRepos); err != nil {
+	if err := deleteRepos(ctx, baseURL, token, unguardedRepos); err != nil {
 		switch err.Error() {
-		case errInsufficientTokenPermission:
+		case insufficientTokenPermissionMsg:
 			fmt.Fprintf(stderr, "Error: token does not have permission to delete repos\n")
 		default:
 			fmt.Fprintf(stderr, "Error: %s\n", err)
