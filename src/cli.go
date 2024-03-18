@@ -13,12 +13,14 @@ import (
 )
 
 const (
+	// Exit codes
 	exitOk  = 0
 	exitErr = 1
 
-	userNotFoundMsg                = "API request failed with status: 404"
-	invalidTokenMsg                = "API request failed with status: 401"
-	insufficientTokenPermissionMsg = "API request failed with status: 403"
+	// Error messages to catch from the GitHub API
+	ErrMsg401 = "API request failed with status: 401"
+	ErrMsg403 = "API request failed with status: 403"
+	ErrMsg404 = "API request failed with status: 404"
 )
 
 type repo struct {
@@ -64,6 +66,7 @@ func fetchForkedReposPage(
 		return nil, err
 	}
 
+	// Filter out non-forked repositories
 	var forkedRepos []repo
 	for _, r := range repos {
 		if r.IsFork {
@@ -136,26 +139,30 @@ func filterForkedRepos(
 	guardedRepoNames []string,
 	olderThanDays int) ([]repo, []repo) {
 
-	unguardedRepos, guardedRepos := make([]repo, 0), make([]repo, 0)
-	cutOffDate := time.Now().AddDate(0, 0, -olderThanDays)
+	unguardedRepos, guardedRepos := []repo{}, []repo{}
+
+	now := time.Now()
+
+	// Convert olderThanDays to duration and subtract from current time to get cutoff date
+	cutOffDate := now.Add(time.Duration(-olderThanDays) * 24 * time.Hour)
 
 	for _, repo := range forkedRepos {
-		if repo.CreatedAt.After(cutOffDate) ||
-			repo.UpdatedAt.After(cutOffDate) || repo.PushedAt.After(cutOffDate) {
-			guardedRepos = append(guardedRepos, repo)
-			continue
-		}
+		// Check if repo activity is after cutoff date or name matches guarded list
+		hasRecentActivity := repo.PushedAt.After(cutOffDate) ||
+			repo.UpdatedAt.After(cutOffDate) || repo.CreatedAt.After(cutOffDate)
 
-		guarded := false
-		for _, guardedRepoName := range guardedRepoNames {
-			// Simple fuzzy match: check if protectedRepo is contained within repo.Name
-			if strings.Contains(strings.ToLower(repo.Name), strings.ToLower(guardedRepoName)) {
-				guarded = true
+		isGuardedName := false
+		for _, name := range guardedRepoNames {
+			repoName := strings.ToLower(repo.Name)
+			name = strings.ToLower(name)
+
+			if strings.TrimSpace(name) != "" && strings.Contains(repoName, name) {
+				isGuardedName = true
 				break
 			}
 		}
 
-		if guarded {
+		if hasRecentActivity || isGuardedName {
 			guardedRepos = append(guardedRepos, repo)
 		} else {
 			unguardedRepos = append(unguardedRepos, repo)
@@ -356,9 +363,9 @@ func (c *cliConfig) CLI(args []string) int {
 
 	if err != nil {
 		switch err.Error() {
-		case userNotFoundMsg:
+		case ErrMsg404:
 			fmt.Fprintf(stderr, "Error: user not found\n")
-		case invalidTokenMsg:
+		case ErrMsg401:
 			fmt.Fprintf(stderr, "Error: invalid token\n")
 		default:
 			fmt.Fprintf(stderr, "Error: %s\n", err)
@@ -377,13 +384,13 @@ func (c *cliConfig) CLI(args []string) int {
 		olderThanDays)
 
 	// Displaying safeguarded repositories
-	fmt.Fprintf(stdout, "\nGuarded forked repos (won't be deleted):\n")
+	fmt.Fprintf(stdout, "\nGuarded forked repos [won't be deleted]:\n")
 	for _, repo := range guardedRepos {
 		fmt.Fprintf(stdout, "    - %s\n", repo.URL)
 	}
 
 	// Displaying unguarded repositories
-	fmt.Fprintf(stdout, "\nUnguarded forked repos (will be deleted):\n")
+	fmt.Fprintf(stdout, "\nUnguarded forked repos [will be deleted]:\n")
 	for _, repo := range unguardedRepos {
 		fmt.Fprintf(stdout, "    - %s\n", repo.URL)
 	}
@@ -401,8 +408,10 @@ func (c *cliConfig) CLI(args []string) int {
 	fmt.Fprintf(stdout, "\nDeleting forked repositories...\n")
 	if err := deleteRepos(ctx, baseURL, token, unguardedRepos); err != nil {
 		switch err.Error() {
-		case insufficientTokenPermissionMsg:
+		case ErrMsg403:
 			fmt.Fprintf(stderr, "Error: token does not have permission to delete repos\n")
+		case ErrMsg404:
+			fmt.Fprintf(stderr, "Error: repo not found\n")
 		default:
 			fmt.Fprintf(stderr, "Error: %s\n", err)
 		}
