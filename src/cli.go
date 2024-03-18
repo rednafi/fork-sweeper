@@ -114,6 +114,9 @@ func doRequest(req *http.Request, token string, result any) error {
 
 	req.Header.Add("Authorization", "Bearer "+token)
 	req.Header.Add("Accept", "application/vnd.github.v3+json")
+	req.Header.Add("User-Agent", "Mozilla/5.0")
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("X-GitHub-Api-Version", "2022-11-28")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
