@@ -18,32 +18,36 @@ import (
 func TestUnmarshalRepo(t *testing.T) {
 	t.Parallel()
 	// Example JSON string that represents a repo's data
-	jsonString := `{
-		"full_name": "example/repo",
-		"html_url": "https://github.com/example/repo",
+	jsonStr := `{
+		"name": "test-repo",
+		"html_url": "https://github.com/test-owner/test-repo",
 		"fork": false,
 		"owner": {
-			"name": "example"
+			"login": "test-owner"
 		},
-		"created_at": "2020-01-01T00:00:00Z"
+		"created_at": "2020-01-01T00:00:00Z",
+		"updated_at": "2020-01-01T00:00:00Z",
+		"pushed_at": "2020-01-01T00:00:00Z"
 	}`
 
 	// Expected repo object based on the JSON string
 	expected := repo{
-		Name:   "example/repo",
-		URL:    "https://github.com/example/repo",
+		Name:   "test-repo",
+		URL:    "https://github.com/test-owner/test-repo",
 		IsFork: false,
 		Owner: struct {
-			Name string `json:"name"`
+			Name string `json:"login"`
 		}{
-			Name: "example",
+			Name: "test-owner",
 		},
 		CreatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+		PushedAt:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 
 	// Unmarshal the JSON string into a repo struct
 	var result repo
-	err := json.Unmarshal([]byte(jsonString), &result)
+	err := json.Unmarshal([]byte(jsonStr), &result)
 	if err != nil {
 		t.Fatalf("Unmarshalling failed: %v", err)
 	}
@@ -65,26 +69,39 @@ func TestFetchForkedReposPage(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintln(
 				w,
-				`[{"full_name": "example/forkedrepo",`+
-					`"html_url": "https://github.com/example/forkedrepo", "fork": true,`+
-					`"owner": {"name": "example"}, "created_at": "2020-01-01T00:00:00Z"}]`)
+				`[{"name": "test-forked-repo",`+
+					`"html_url": "https://github.com/test-owner/test-forked-repo", `+
+					`"fork": true,`+
+					`"owner": {"login": "test-owner"},`+
+					`"created_at": "2020-01-01T00:00:00Z",`+
+					`"updated_at": "2020-01-01T00:00:00Z",`+
+					`"pushed_at": "2020-01-01T00:00:00Z"}]`)
 		}))
 	defer mockServer.Close()
 
 	expected := []repo{
 		{
-			Name:   "example/forkedrepo",
-			URL:    "https://github.com/example/forkedrepo",
+			Name:   "test-forked-repo",
+			URL:    "https://github.com/test-owner/test-forked-repo",
 			IsFork: true,
 			Owner: struct {
-				Name string `json:"name"`
-			}{Name: "example"},
+				Name string `json:"login"`
+			}{Name: "test-owner"},
 			CreatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+			UpdatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+			PushedAt:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 	}
 
 	forkedRepos, err := fetchForkedReposPage(
-		context.Background(), mockServer.URL, "example", "fake-token", 1, 10, 60)
+		context.Background(), // ctx
+		mockServer.URL,       // baseURL
+		"test-owner",         // owner
+		"test-token",         // token
+		1,                    // pageNum
+		10,                   // perPage
+	)
+
 	if err != nil {
 		t.Fatalf("fetchForkedReposPage returned an error: %v", err)
 	}
@@ -98,7 +115,7 @@ func TestFetchForkedReposPage(t *testing.T) {
 			repo.URL != expected[i].URL ||
 			repo.IsFork != expected[i].IsFork ||
 			repo.Owner.Name != expected[i].Owner.Name ||
-			!repo.CreatedAt.Equal(expected[i].CreatedAt) {
+			!repo.UpdatedAt.Equal(expected[i].UpdatedAt) {
 			t.Errorf("Expected repo %+v, got %+v", expected[i], repo)
 		}
 	}
@@ -112,47 +129,58 @@ func TestFetchForkedRepos(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintln(
 				w,
-				`[{"full_name": "example/forkedrepo",`+
-					`"html_url": "https://test.com/example/forkedrepo", "fork": true,`+
-					`"owner": {"name": "example"}, "created_at": "2020-01-01T00:00:00Z"},`+
+				`[{"name": "test-repo-1",`+
+					`"html_url": "https://test.com/test-owner/test-repo-1",`+
+					`"fork": true,`+
+					`"owner": {"login": "test-owner"},`+
+					`"created_at": "2020-01-01T00:00:00Z",`+
+					`"updated_at": "2020-01-01T00:00:00Z",`+
+					`"pushed_at": "2020-01-01T00:00:00Z"},`+
 
-					`{"full_name": "example/forkedrepo2",`+
-					`"html_url": "https://test.com/example/forkedrepo2", "fork": true,`+
-					`"owner": {"name": "example2"}, "created_at": "2020-01-01T00:00:00Z"}]`)
-
+					`{"name": "test-repo-2",`+
+					`"html_url": "https://test.com/test-owner/test-repo-2",`+
+					`"fork": true,`+
+					`"owner": {"login": "test-owner"},`+
+					`"created_at": "2020-01-01T00:00:00Z",`+
+					`"updated_at": "2020-01-01T00:00:00Z",`+
+					`"pushed_at": "2020-01-01T00:00:00Z"}]`)
 		}))
 
 	defer mockServer.Close()
 
 	expected := []repo{
 		{
-			Name:   "example/forkedrepo",
-			URL:    "https://test.com/example/forkedrepo",
+			Name:   "test-repo-1",
+			URL:    "https://test.com/test-owner/test-repo-1",
 			IsFork: true,
 			Owner: struct {
-				Name string `json:"name"`
-			}{Name: "example"},
+				Name string `json:"login"`
+			}{Name: "test-owner"},
 			CreatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+			UpdatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+			PushedAt:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
-			Name:   "example/forkedrepo2",
-			URL:    "https://test.com/example/forkedrepo2",
+			Name:   "test-repo-2",
+			URL:    "https://test.com/test-owner/test-repo-2",
 			IsFork: true,
 			Owner: struct {
-				Name string `json:"name"`
-			}{Name: "example2"},
+				Name string `json:"login"`
+			}{Name: "test-owner"},
 			CreatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+			UpdatedAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+			PushedAt:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 	}
 
 	forkedRepos, err := fetchForkedRepos(
-		context.Background(),
-		mockServer.URL,
-		"example",
-		"fake-token",
-		10,
-		1,
-		60)
+		context.Background(), // ctx
+		mockServer.URL,       // baseURL
+		"test-owner",         // owner
+		"test-token",         // token
+		10,                   // perPage
+		1,                    // maxPage
+	)
 	if err != nil {
 		t.Fatalf("fetchForkedRepos returned an error: %v", err)
 	}
@@ -166,7 +194,9 @@ func TestFetchForkedRepos(t *testing.T) {
 			repo.URL != expected[i].URL ||
 			repo.IsFork != expected[i].IsFork ||
 			repo.Owner.Name != expected[i].Owner.Name ||
-			!repo.CreatedAt.Equal(expected[i].CreatedAt) {
+			!repo.CreatedAt.Equal(expected[i].CreatedAt) ||
+			!repo.UpdatedAt.Equal(expected[i].UpdatedAt) ||
+			!repo.PushedAt.Equal(expected[i].PushedAt) {
 			t.Errorf("Expected repo %+v, got %+v", expected[i], repo)
 		}
 	}
@@ -219,9 +249,10 @@ func TestDoRequest(t *testing.T) {
 
 			// Attempt to decode into this variable
 			var result map[string]interface{}
+			var token string
 
 			// Call doRequest with the mock server's URL
-			err := doRequest(req, &result)
+			err := doRequest(req, token, &result)
 
 			// Check for error existence
 			if (err != nil) != tt.wantErr {
@@ -234,6 +265,126 @@ func TestDoRequest(t *testing.T) {
 				t.Errorf("doRequest() error = %v, want error to contain %v", err, tt.errorContains)
 			}
 		})
+	}
+}
+func TestFilterForkedRepos_EmptyInput(t *testing.T) {
+	t.Parallel()
+	unguarded, guarded := filterForkedRepos(nil, nil, 30)
+	if len(unguarded) != 0 || len(guarded) != 0 {
+		t.Errorf("Expected both slices to be empty, got %v and %v", unguarded, guarded)
+	}
+}
+
+func TestFilterForkedRepos_AllGuarded(t *testing.T) {
+	now := time.Now()
+	forkedRepos := []repo{
+		{Name: "test-repo-1", CreatedAt: now, UpdatedAt: now, PushedAt: now},
+		{Name: "test-repo-2", CreatedAt: now, UpdatedAt: now, PushedAt: now},
+	}
+	guardedRepoNames := []string{"test-repo"}
+	unguarded, guarded := filterForkedRepos(forkedRepos, guardedRepoNames, 30)
+	if len(unguarded) != 0 || len(guarded) != 2 {
+		t.Errorf("Expected unguarded 0 and guarded 2, got unguarded %d and guarded %d", len(unguarded), len(guarded))
+	}
+}
+
+func TestFilterForkedRepos_AllUnguardedDueToDate(t *testing.T) {
+	forkedRepos := []repo{
+		{
+			Name:      "old-repo-1",
+			CreatedAt: time.Now().AddDate(0, -1, 0),
+			UpdatedAt: time.Now().AddDate(0, -1, 0),
+			PushedAt:  time.Now().AddDate(0, -1, 0)},
+		{
+			Name:      "old-repo-2",
+			CreatedAt: time.Now().AddDate(0, -2, 0),
+			UpdatedAt: time.Now().AddDate(0, -2, 0),
+			PushedAt:  time.Now().AddDate(0, -2, 0)},
+	}
+	var guardedRepoNames []string
+	unguarded, guarded := filterForkedRepos(forkedRepos, guardedRepoNames, 10)
+
+	if len(unguarded) != 2 || len(guarded) != 0 {
+		t.Errorf("Expected unguarded 2 and guarded 0, got unguarded %d and guarded %d", len(unguarded), len(guarded))
+	}
+}
+
+func TestFilterForkedRepos_UnknownGuardRepoName(t *testing.T) {
+	forkedRepos := []repo{
+		{
+			Name:      "old-repo-1",
+			CreatedAt: time.Now().AddDate(0, -1, 0),
+			UpdatedAt: time.Now().AddDate(0, -1, 0),
+			PushedAt:  time.Now().AddDate(0, -1, 0)},
+		{
+			Name:      "old-repo-2",
+			CreatedAt: time.Now().AddDate(0, -2, 0),
+			UpdatedAt: time.Now().AddDate(0, -2, 0),
+			PushedAt:  time.Now().AddDate(0, -2, 0)},
+	}
+	guardedRepoNames := []string{"unknown-repo-1", "unknown-repo-2"}
+
+	unguarded, guarded := filterForkedRepos(forkedRepos, guardedRepoNames, 10)
+
+	if len(unguarded) != 2 || len(guarded) != 0 {
+		t.Errorf("Expected unguarded 2 and guarded 0, got unguarded %d and guarded %d", len(unguarded), len(guarded))
+	}
+}
+
+func TestFilterForkedRepos_MixedGuardedUnguarded(t *testing.T) {
+	forkedRepos := []repo{
+		{
+			Name:      "new-repo-1",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+			PushedAt:  time.Now()},
+		{
+			Name:      "protected-old-repo",
+			CreatedAt: time.Now().AddDate(0, -2, 0),
+			UpdatedAt: time.Now().AddDate(0, -2, 0),
+			PushedAt:  time.Now().AddDate(0, -2, 0)},
+	}
+
+	guardedRepoNames := []string{"protected"}
+	unguarded, guarded := filterForkedRepos(forkedRepos, guardedRepoNames, 30)
+	if len(unguarded) != 0 || len(guarded) != 2 {
+		t.Errorf("Expected unguarded 0 and guarded 2, got unguarded %d and guarded %d", len(unguarded), len(guarded))
+	}
+}
+
+func TestFilterForkedRepos_CaseInsensitive(t *testing.T) {
+	forkedRepos := []repo{
+		{
+			Name:      "Case-Sensitive-Repo",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+			PushedAt:  time.Now()},
+	}
+	guardedRepoNames := []string{"case-sensitive"}
+	unguarded, guarded := filterForkedRepos(forkedRepos, guardedRepoNames, 30)
+	if len(unguarded) != 0 || len(guarded) != 1 {
+		t.Errorf("Expected unguarded 0 and guarded 1, got unguarded %d and guarded %d", len(unguarded), len(guarded))
+	}
+}
+
+func TestFilterForkedRepos_MultipleMatches(t *testing.T) {
+	forkedRepos := []repo{
+		{
+			Name:      "match-1",
+			CreatedAt: time.Now().AddDate(0, -1, 0),
+			UpdatedAt: time.Now().AddDate(0, -1, 0),
+			PushedAt:  time.Now().AddDate(0, -1, 0)},
+		{
+			Name:      "match-2",
+			CreatedAt: time.Now().AddDate(0, -2, 0),
+			UpdatedAt: time.Now().AddDate(0, -2, 0),
+			PushedAt:  time.Now().AddDate(0, -2, 0)},
+	}
+	guardedRepoNames := []string{"match-1", "match-2"}
+
+	unguarded, guarded := filterForkedRepos(forkedRepos, guardedRepoNames, 29)
+	if len(unguarded) != 0 || len(guarded) != 2 {
+		t.Errorf("Expected unguarded 0 and guarded 2, got unguarded %d and guarded %d", len(unguarded), len(guarded))
 	}
 }
 
@@ -298,10 +449,17 @@ var (
 		owner,
 		token string,
 		perPage,
-		maxPage,
-		olderThanDays int) ([]repo, error) {
+		maxPage int) ([]repo, error) {
 		fmt.Println("mockFetchForkedRepos")
 		return []repo{{Name: "test-repo"}}, nil
+	}
+
+	mockFilterForkedRepos = func(
+		forkedRepos []repo,
+		guardedRepoNames []string,
+		olderThanDays int) ([]repo, []repo) {
+		fmt.Println("mockFilterForkedRepos")
+		return forkedRepos, nil
 	}
 
 	mockDeleteRepos = func(
@@ -342,6 +500,14 @@ func TestWithFetchForkedRepos_Option(t *testing.T) {
 	}
 }
 
+func TestWithFilterForkedRepos_Option(t *testing.T) {
+	t.Parallel()
+	config := NewCLIConfig(nil, nil, "").withFilterForkedRepos(filterForkedRepos)
+	if config.filterForkedRepos == nil {
+		t.Fatal("WithFilterForkedRepos did not set the function")
+	}
+}
+
 func TestWithDeleteRepos_Option(t *testing.T) {
 	t.Parallel()
 	config := NewCLIConfig(nil, nil, "").withDeleteRepos(mockDeleteRepos)
@@ -362,7 +528,8 @@ func TestCLI_MissingOwnerToken(t *testing.T) {
 		"test-version",
 	).withFetchForkedRepos(mockFetchForkedRepos).
 		withDeleteRepos(mockDeleteRepos).
-		withFlagErrorHandling(mockFlagErrorHandler)
+		withFlagErrorHandling(mockFlagErrorHandler).
+		withFilterForkedRepos(mockFilterForkedRepos)
 
 		// Execute the CLI
 	exitCode := cliConfig.CLI([]string{"cmd"})
@@ -387,10 +554,11 @@ func TestCLI_Success(t *testing.T) {
 		"test-version",
 	).withDeleteRepos(mockDeleteRepos).
 		withFetchForkedRepos(mockFetchForkedRepos).
-		withFlagErrorHandling(mockFlagErrorHandler)
+		withFlagErrorHandling(mockFlagErrorHandler).
+		withFilterForkedRepos(mockFilterForkedRepos)
 
 	// Execute the CLI
-	args := []string{"--owner", "testOwner", "--token", "testToken", "--older-than", "30"}
+	args := []string{"--owner", "testOwner", "--token", "testToken", "--older-than-days", "30"}
 
 	exitCode := cliConfig.CLI(args)
 
