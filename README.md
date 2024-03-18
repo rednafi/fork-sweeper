@@ -114,6 +114,8 @@ Remove unused GitHub forks
         - https://github.com/rednafi/dysconfig
     ```
 
+    The `--guard` parameter can be passed multiple times to filter out multiple repos.
+
 -   By default, the CLI will fetch 100 pages of forked repositories with 100 entries on each
     page. If you need more, you can set the page number as follows:
 
